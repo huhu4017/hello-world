@@ -1,0 +1,23 @@
+loop：
+libev::default_loop：
+      signle watcher：退出时处理退出过程
+      fork watcher：如果需要有的话
+      
+libev::loop
+      timer
+      periodic
+      
+object design
+
+数据库：
+redis + mysql
+redis：
+
+
+网络：
+asio
+
+
+
+脚本：
+lua_tinker
