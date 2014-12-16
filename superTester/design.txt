@@ -1,3 +1,24 @@
+启动必备：
+asio boost,要不全部boost，要不就用boost的分离工具将asio分离出来。
+lua，lua文件夹下有生成好的lualib.a（如果要调试，则需安装luasocket,参考：http://homing.lofter.com/post/1a43ac_50fe6e）
+libev,libev需要下源码安装
+hiredis，在目录下面有.a
+唯一id生成器，http://blog.csdn.net/shell2008/article/details/40616911 uuid
+
+// 活动区域，一个关于各种逻辑和游戏内容进行的一个基础单位。
+Game:
+// 每个活动区域有以下组成
+// 网络
+network
+// 数据保存读取
+db
+// 事件循环
+libevloop
+// 对象管理
+object manager
+
+
+
 loop：
 libev::default_loop：
       signle watcher：退出时处理退出过程
@@ -16,6 +37,7 @@ redis：
 
 网络：
 asio
+// 游戏服务器连接网关服务器，log服务器，玩家数据存储服务器
 
 
 

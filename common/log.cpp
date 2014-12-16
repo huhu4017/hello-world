@@ -274,17 +274,18 @@ bool cThreadLog::processlog()
 			continue;
 		if (strlastfilename != itfile->first)
 		{
+			file.close();
 			file.open(itfile->first.c_str(), ios_base::app | ios_base::out);
+			if (!file.is_open())
+				continue;
 			strlastfilename = itfile->first;
 		}
-		if (file.fail())
-			continue;
 		file << itfile->second.c_str() << '\n';
 	}
 
-	file.flush();
-//	if (!file.fail())
-//		file.close();
+	 file.flush();
+	//if (!file.fail())
+		file.close();
 	return !bexit;
 }
 
