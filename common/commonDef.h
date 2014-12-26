@@ -34,5 +34,8 @@ typedef unsigned long       HANDLE;
 typedef unsigned int        UINT;
 typedef unsigned long*      LPDWORD;
 
+#ifndef SAFEDELETE
+#define SAFEDELETE(p) if(p) {delete p; p = NULL;}
+#endif
 
 

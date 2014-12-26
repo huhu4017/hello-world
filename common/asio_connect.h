@@ -3,11 +3,13 @@
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/bind.hpp>
 #include <boost/asio.hpp>
+#include <boost/array.hpp>
 #include <vector>
 #include <list>
 #include <queue>
 #include <sys/types.h>
 
+class asio_netModule;
 
 using boost::asio::ip::tcp;
 
@@ -50,7 +52,7 @@ public:
 public:
 	void reset_unpacker_state() {total_data_len = -1; data_len = 0;}
 
-	bool on_recv(size_t bytes_transferred, int iconnectid);
+	bool on_recv(size_t bytes_transferred, int iconnectid, asio_netModule *pNetModule);
 
 	boost::asio::mutable_buffers_1 prepare_next_recv(size_t& min_recv_len)
 	{
@@ -70,7 +72,7 @@ class connection_base
   : public boost::enable_shared_from_this<connection_base>
 {
 public:
-	connection_base(boost::asio::io_service& io_service, const char *szname);
+	connection_base(boost::asio::io_service& io_service, const char *szname, asio_netModule *pModule);
 	virtual ~connection_base();
 
 	tcp::socket& socket()
@@ -162,6 +164,8 @@ protected:
 	// [Nov 28, 2014] huhu 当前这个连接是否连接上了的
 	// 0 没连上的，1连上了，2正在连接
 	int m_bconnected;
+
+	asio_netModule *m_pNetModule;
 };
 typedef boost::shared_ptr<connection_base> connectbase_ptr;
 
@@ -171,7 +175,7 @@ typedef boost::shared_ptr<connection_base> connectbase_ptr;
 class connectAsclient : public connection_base
 {
 public:
-	connectAsclient(boost::asio::io_service& io_service, const char *szname);
+	connectAsclient(boost::asio::io_service& io_service, const char *szname, asio_netModule *pModule);
 	~connectAsclient();
 
 	/*	[Oct 25, 2014] huhu
@@ -200,6 +204,13 @@ public:
 	 *	通知子类消息发送完成
 	*/
 	virtual void afterSentMsg(boost::system::error_code const& ec, size_t bytes_transferred, const char *szMsgDescription);
+
+	/*	[Dec 17, 2014] huhu
+	 *	检查需要重新连接不。
+	 *	这个网络库重连是需要在外部保存一个连接的实例，然后手动调用这个接口来实现
+	 *	这是因为重连频率和重连与否都需要外部来配置，所以就让外部来调用这个接口了。
+	*/
+	void check_reconnect(time_t second);
 private:
 	// [Oct 25, 2014] huhu
 	std::string _strip;
@@ -216,7 +227,7 @@ typedef boost::shared_ptr<connectAsclient> connectasclient_ptr;
 class connectFromclient : public connection_base
 {
 public:
-	connectFromclient(boost::asio::io_service& io_service, const char *szname);
+	connectFromclient(boost::asio::io_service& io_service, const char *szname, asio_netModule *pModule);
 	~connectFromclient();
 
 	/*	[Oct 25, 2014] huhu

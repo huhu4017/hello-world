@@ -67,7 +67,6 @@ private:
 #include <queue>
 #include <map>
 #include <string>
-#include <strstream>
 #include <sstream>
 
 static void cmd_help(const char *szparam);

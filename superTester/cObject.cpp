@@ -10,12 +10,22 @@
 cObject::cObject()
 {
 	// TODO Auto-generated constructor stub
+	m_gid = 0;
 
 }
 
 cObject::~cObject()
 {
 	// TODO Auto-generated destructor stub
+}
+
+void cObject::setGid(obj_gid gid)
+{
+	if(gid == m_gid)
+		return;
+	obj_gid old = m_gid;
+	m_gid = gid;
+	onGidChange(old);
 }
 
 cManager::cManager()

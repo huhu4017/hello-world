@@ -2,6 +2,7 @@
 // 需要一个相对不太容易出问题，确实在其他地方无法创建实例的单键。
 #include "Singleton.h"
 #include <list>
+#include <map>
 // [Sep 29, 2014] huhu 新增跨平台多线程方式的log操作类
 // 实现了windows和linux两个平台的多线程写本地log文件功能
 
@@ -75,12 +76,22 @@ public:
 	 */
 	bool processlog();
 
+	/*	[Dec 17, 2014] huhu
+	 *	检查是不是没有文件名里面包含的路径，如果是的话创建并返回true，否则返回false
+	*/
+	bool checkdir(const char *filename, size_t charcount);
+
 	static void *update(void *args);
 private:
 	/*	[Sep 29, 2014] huhu
 	 *	新增一个log
 	 */
 	void pushlog(const char *info, int type/*log_type*/, const char *filename = "log.txt");
+
+	/*	[Dec 16, 2014] huhu
+	 *	关闭所有的file
+	*/
+	void closeallfile();
 
 	// 单键标配
 private:
@@ -102,6 +113,8 @@ public:
 	typedef std::list< std::pair<std::string, std::string> > stringpairlist;
 	stringpairlist m_listfileinfo;
 
+	typedef std::map<std::string, std::ofstream*> mapofs;
+	mapofs m_mapfstream;
 };
 #endif
 

@@ -7,6 +7,8 @@
 #include <iostream>
 #include <stdarg.h>
 #include <time.h>
+#include <errno.h>
+#include <sys/stat.h>
 
 using namespace std;
 int g_logswitch = 0;
@@ -243,6 +245,8 @@ cThreadLog::cThreadLog()
     }
 }
 
+int ifileopencount = 0;
+
 bool cThreadLog::processlog()
 {
 	bool bexit = false;
@@ -266,33 +270,90 @@ bool cThreadLog::processlog()
 	stringpairlist tempfilelist = m_listfileinfo;
 	m_listfileinfo.clear();
 	pthread_mutex_unlock(&m_mutex_list);
-	std::ofstream file;
-	string strlastfilename;
 	for (stringpairlist::iterator itfile = tempfilelist.begin(); itfile != tempfilelist.end(); ++itfile)
 	{
 		if (itfile->second.empty())
 			continue;
-		if (strlastfilename != itfile->first)
+		std::ofstream *file = NULL;
+		if(m_mapfstream.find(itfile->first) != m_mapfstream.end())
+			file = m_mapfstream[itfile->first];
+		else
+			file = new std::ofstream;
+		//if (strlastfilename != itfile->first)
+		//{
+		//	file.close();
+		if(!(*file).is_open())
+			(*file).open(itfile->first.c_str(), ios_base::app | ios_base::out);
+		if (!(*file).is_open() || (*file).fail())
 		{
-			file.close();
-			file.open(itfile->first.c_str(), ios_base::app | ios_base::out);
-			if (!file.is_open())
+			// [Dec 17, 2014] huhu 检查路径，返回ture表示创建了路径，再试试看能打开不。
+			if(checkdir(itfile->first.c_str(), itfile->first.length()))
+			{
+				(*file).open(itfile->first.c_str(), ios_base::app | ios_base::out);
+				if (!(*file).is_open() || (*file).fail())
+				{
+					cout << itfile->first.c_str() << " open fail! " << strerror(errno) << " " << ifileopencount << " " << (*file).rdstate() << endl;
+					delete file;
+					continue;
+				}
+			}
+			else
+			{
+				cout << itfile->first.c_str() << " open fail! " << strerror(errno) << " " << ifileopencount << " " << (*file).rdstate() << endl;
+				delete file;
 				continue;
-			strlastfilename = itfile->first;
+			}
 		}
-		file << itfile->second.c_str() << '\n';
+		ifileopencount++;
+		//}
+		(*file) << itfile->second.c_str() << '\n' << std::flush;
+		m_mapfstream[itfile->first] = file;
 	}
-
-	 file.flush();
-	//if (!file.fail())
-		file.close();
+	closeallfile();
 	return !bexit;
 }
 
+bool cThreadLog::checkdir(const char *filename, size_t charcount)
+{
+	if(!filename)
+		return false;
+	size_t iIndex = 0;
+	for(size_t i = 0; i < charcount; ++i)
+	{
+#ifdef WIN32
+		if(filename[i] == '/' || filename[i] == '\\')
+#else
+		if(filename[i] == '/')
+#endif
+		{
+			iIndex = std::max(i, iIndex);
+		}
+	}
+	if(!iIndex)
+		return false;
+	if(iIndex >= charcount)
+		return false;
+
+	char szPatch[512] = "";
+	if(512 <= iIndex)
+		return false;
+
+	memcpy(szPatch, filename, iIndex);
+
+    if(access(szPatch,F_OK) == -1)
+    {
+    	if(mkdir(szPatch,0777))
+    		return false;
+    }
+    else
+    	return false;
+	return true;
+}
 
 cThreadLog::~cThreadLog()
 {
 	pushlog("exit", log_console);
+	closeallfile();
 	pthread_join(m_t, NULL);
 	pthread_mutex_destroy(&m_mutex_list);
 	pthread_cond_destroy(&m_cv);
@@ -345,6 +406,15 @@ void cThreadLog::pushlog(const char *info, int type, const char *filename /* = "
 bool cThreadLog::init()
 {
 	return true;
+}
+
+void cThreadLog::closeallfile()
+{
+	for(mapofs::iterator it = m_mapfstream.begin(); it != m_mapfstream.end(); ++it)
+	{
+		delete it->second;
+	}
+	m_mapfstream.clear();
 }
 
 #endif

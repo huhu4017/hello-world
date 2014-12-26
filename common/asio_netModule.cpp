@@ -81,7 +81,7 @@ void* asio_netModule::threadhandler(void* args)
 	try
 	{
 		cLog::scPrint("%lu threadhandler io_service.run", pthread_self());
-		while(!io_service.stopped())
+		//while(!io_service.stopped())
 			io_service.run();
 	}
 	catch (std::exception& e)
@@ -133,7 +133,7 @@ bool asio_netModule::run(int ithreadcount/* = 1 */)
 {
 	if(!_mapacceptors.size())
 	{
-		cLog::scPrint("asio_netModule false run");
+		cLog::scPrint("asio_netModule run on _mapacceptors is empty");
 	}
 	if(_iorun_threadlist.size())
 	{
@@ -150,6 +150,7 @@ bool asio_netModule::run(int ithreadcount/* = 1 */)
 			{
 				cLog::scPrint("创建threadhandler_static线程失败！%u %d", _threadt, i);
 			}
+			_iorun_threadlist.push_back(_threadt);
 		}
 	}
 	else
@@ -169,7 +170,7 @@ void asio_netModule::conntinueAccept(int iport)
 		cLog::scPrint("%lu conntinueAccept acceptor can not find with port:%d", pthread_self(), iport);
 		return;
 	}
-	connectfromclient_ptr newconnect(new connectFromclient(io_service, it->second->_szAcceptorname));
+	connectfromclient_ptr newconnect(new connectFromclient(io_service, it->second->_szAcceptorname, this));
 	newconnect->startAccept(it->second->_acceptor, it->second->_szAcceptorname);
 }
 
@@ -192,7 +193,7 @@ void asio_netModule::addserver(const char* szServerName, const char *szip, int i
 		ptr = acceptorinfo_ptr(new stAcceptorInfo(io_service, boost::asio::ip::tcp::endpoint(boost::asio::ip::address(boost::asio::ip::address_v4::from_string(szip)), iport)));
 	}
 	strcpy(ptr->_szAcceptorname, szServerName);
-	connectfromclient_ptr newconnect(new connectFromclient(io_service, szServerName));
+	connectfromclient_ptr newconnect(new connectFromclient(io_service, szServerName, this));
 	newconnect->startAccept(ptr->_acceptor, szServerName);
 	_mapacceptors[iport] = ptr;
 }
@@ -212,7 +213,7 @@ void asio_netModule::afterserverconnected(connectbase_ptr pConnect, boost::syste
 
 connectasclient_ptr asio_netModule::addclient(const char* szclientname, const char* szip, int iport)
 {
-	connectasclient_ptr client(new connectAsclient(io_service, szclientname));
+	connectasclient_ptr client(new connectAsclient(io_service, szclientname, this));
 	client->connect(szip, iport);
 	return client;
 }

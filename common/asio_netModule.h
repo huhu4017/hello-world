@@ -157,7 +157,7 @@ protected:
 	void conntinueAccept(int iport);
 
 //	void pushsentmsg(stMsg &msg);
-private:
+protected:
 	asio_netModule();
 	virtual ~asio_netModule();
 	friend class Singleton<asio_netModule>;
@@ -189,4 +189,16 @@ private:
 //    msgmap _sentmsglist;
 };
 
+// general Singleton
 #define asio_net_module asio_netModule::sharedPtr()
+
+// multiple net_module request
+// either this or Singleton
+class mul_asio_netModule : public asio_netModule
+{
+public:
+
+
+private:
+};
+

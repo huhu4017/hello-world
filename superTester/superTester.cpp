@@ -15,25 +15,45 @@ const char *getErrorMessage()
 /*	[Dec 15, 2014] huhu
  *	塞错误信息进来
 */
-void pushErrorMessage(const char *szMessage)
+void pushErrorMessage(const char *szMessage, ...)
 {
 	if(!szMessage)
 		return;
-	errormessage = szMessage;
+
+    static char szBuffer[1024] = {0};
+	memset( szBuffer, 0, sizeof( szBuffer ) );
+
+    va_list vl;
+    va_start( vl, szMessage );
+    vsnprintf(szBuffer , 1024, szMessage, vl );
+    va_end(vl);
+
+	errormessage = szBuffer;
+}
+
+obj_gid gen_gid(cObject *p)
+{
+	static char gamegid = 0;
+	if(dynamic_cast<cGame*>(p))
+	{
+		return ++gamegid;
+	}
+	else
+		return 0;
 }
 
 int main()
 {
-	bool ret = gamemanager->LoadGames("games.ini");
-	if(!ret)
+
+	cGame game;
+	int ret = game.create("game1.ini");
+	if(ret)
 	{
-		cout << getErrorMessage() << endl;
+		cout << "create fail! " << endl << getErrorMessage() << endl;
 		return -1;
 	}
 
-	if(!gamemanager->run())
-		cout << getErrorMessage() << endl;
-	else
-		cout << "正常退出。" << endl;
+	game.run();
+	cout << "正常退出。" << endl;
     return 0;
 }

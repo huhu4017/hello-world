@@ -14,11 +14,12 @@ unsigned long long g_sentmsgcount_asio = 0;
 
 extern void netevent(int iconnectid, int ievent/*e_event*/, int iparam);
 
-connection_base::connection_base(boost::asio::io_service& io_service, const char *szname)
+connection_base::connection_base(boost::asio::io_service& io_service, const char *szname, asio_netModule *pModule)
 : socket_(io_service)
 , _strand(io_service)
 , _sizebuffer(0)
 , _bodybuffer(BODYBUFFER_LEN, 0)
+, m_pNetModule(pModule)
 {
 	_strname = szname;
 	_connectid = asio_netModule::makeconnectid();
@@ -27,7 +28,7 @@ connection_base::connection_base(boost::asio::io_service& io_service, const char
 
 connection_base::~connection_base()
 {
-	cLog::scPrint("%lu connection_base ~connection_base", pthread_self());
+	cLog::scPrint("connection_base ~connection_base %s %d %lu", _strname.c_str(), _connectid, pthread_self());
 	boost::system::error_code er;
 	CloseSocket(er);
 }
@@ -62,7 +63,7 @@ void connection_base::sendMsg(const char *pMsg, size_t size, const char *szMsgDe
 			, tempunion.isize, size)));
 	++g_sentmsgcount_asio;
 
-//	asio_net_module->pushsentmsg(tempmsg);
+//	m_pNetModule->pushsentmsg(tempmsg);
 }
 
 void connection_base::CloseSocket(boost::system::error_code const& ec)
@@ -111,7 +112,7 @@ void connection_base::AfterReadMsg(boost::system::error_code const & ec, size_t 
 		cLog::scPrint("%lu [%s] AfterReadMsg %s", pthread_self(), getname(), ec.message().c_str());
 		return;
 	}
-	bool unpack_ok = unpacker_.on_recv(bytes_transferred, getconnectid());
+	bool unpack_ok = unpacker_.on_recv(bytes_transferred, getconnectid(), m_pNetModule);
 	if (unpack_ok)
 		readmsg();
 }
@@ -128,7 +129,7 @@ void connection_base::AfterSendString(boost::system::error_code const& ec, size_
 		return;
 	}
 	if(!ec)
-		asio_net_module->aftersSentMsg(ec, bytes_transferred, msghead);
+		m_pNetModule->aftersSentMsg(ec, bytes_transferred, msghead);
 	netevent(getconnectid(), e_event_sentmsg, (int)bytes_transferred);
 }
 
@@ -160,8 +161,8 @@ int connection_base::isconnected()
 //			_strand.wrap(bind(&connection_base::AfterReadString, shared_from_this(), boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred, size)));
 //}
 
-connectAsclient::connectAsclient(boost::asio::io_service& io_service, const char *szname)
-: connection_base(io_service, szname)
+connectAsclient::connectAsclient(boost::asio::io_service& io_service, const char *szname, asio_netModule *pModule)
+: connection_base(io_service, szname, pModule)
 {
 }
 
@@ -182,7 +183,7 @@ void connectAsclient::connect(const char* szip, const char* szport)
 	_strport = szport;
 
     tcp::resolver::query query(_strip, _strport);
-	tcp::resolver _resolver(asio_net_module->getio_service());
+	tcp::resolver _resolver(m_pNetModule->getio_service());
     tcp::resolver::iterator iterator = _resolver.resolve(query);
 
     boost::asio::async_connect(socket_, iterator, _strand.wrap(boost::bind(&connectAsclient::onconnected, shared_from_this(), boost::asio::placeholders::error)));
@@ -191,13 +192,13 @@ void connectAsclient::connect(const char* szip, const char* szport)
 
 void connectAsclient::afterCloseSocket()
 {
-	asio_net_module->removeConnect(getconnectid());
+	m_pNetModule->removeConnect(getconnectid());
 }
 
 void connectAsclient::afterOnconnected(boost::system::error_code const& ec)
 {
 	if(!ec)
-		asio_net_module->afterclientconnected(shared_from_this(), ec);
+		m_pNetModule->afterclientconnected(shared_from_this(), ec);
 }
 
 void connectAsclient::afterReadMsg(const boost::system::error_code& ec, size_t bytes_transferred)
@@ -213,8 +214,24 @@ void connectAsclient::afterSentMsg(const boost::system::error_code& ec,
 		CloseSocket(ec);
 }
 
-connectFromclient::connectFromclient(boost::asio::io_service& io_service, const char *szname)
-: connection_base(io_service, szname)
+void connectAsclient::check_reconnect(time_t second)
+{
+	static time_t lasttime = time(0);
+	time_t nowtime = time(0);
+	second = std::min((time_t)1, second);
+	if(nowtime - lasttime > second)
+	{
+		lasttime = nowtime;
+		if(!isconnected())
+		{
+			cLog::scPrint("check_reconnect %s %s", _strip.c_str(), _strport.c_str());
+			connect(_strip.c_str(), _strport.c_str());
+		}
+	}
+}
+
+connectFromclient::connectFromclient(boost::asio::io_service& io_service, const char *szname, asio_netModule *pModule)
+: connection_base(io_service, szname, pModule)
 {
 	_playerguid = 0;
 	_iserverid = 0;
@@ -237,14 +254,14 @@ void connectFromclient::startAccept(tcp::acceptor& acceptor, const char *szserve
 
 void connectFromclient::afterCloseSocket()
 {
-	asio_net_module->removeConnect(getconnectid());
+	m_pNetModule->removeConnect(getconnectid());
 }
 
 void connectFromclient::afterOnconnected(boost::system::error_code const& ec)
 {
 	if(!ec)
-		asio_net_module->afterserverconnected(shared_from_this(), ec);
-	asio_net_module->conntinueAccept(getClientlocalPort());
+		m_pNetModule->afterserverconnected(shared_from_this(), ec);
+	m_pNetModule->conntinueAccept(getClientlocalPort());
 }
 
 void connectFromclient::afterReadMsg(const boost::system::error_code& ec, size_t bytes_transferred)
@@ -274,7 +291,7 @@ void connectFromclient::setServername(const char* szServername)
 	_strServername = szServername;
 }
 
-bool unpacker::on_recv(size_t bytes_transferred, int iconnectid)
+bool unpacker::on_recv(size_t bytes_transferred, int iconnectid, asio_netModule *pNetModule)
 {
 	//len(unsigned int) + msg
 	data_len += bytes_transferred;
@@ -294,7 +311,7 @@ bool unpacker::on_recv(size_t bytes_transferred, int iconnectid)
 				{
 					buffer[i] = (pnext + HEAD_LEN)[i];
 				}
-				asio_net_module->pushmsg(buffer, total_data_len - HEAD_LEN, iconnectid);
+				pNetModule->pushmsg(buffer, total_data_len - HEAD_LEN, iconnectid);
 //				msg_list.push(
 //					boost::shared_ptr<std::string>(new std::string(pnext + HEAD_LEN, total_data_len - HEAD_LEN)));
 				data_len -= total_data_len;
